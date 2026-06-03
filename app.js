@@ -1035,6 +1035,35 @@
     themeRow.appendChild(themeIndicator)
     container.appendChild(themeRow)
 
+    // Reset progress
+    var resetRow = el('div', 'setting-row setting-row-danger')
+    var resetLeft = el('div')
+    resetLeft.innerHTML = '<div class="setting-label">Empezar de cero</div><div class="setting-desc">Borra todo el progreso SM-2, estadisticas y ajustes</div>'
+    var btnReset = el('button', 'btn-danger', 'Reiniciar')
+    btnReset.addEventListener('click', function () {
+      if (!confirm('¿Seguro que quieres borrar TODO el progreso? Esta accion no se puede deshacer.')) return
+      // Remove all lpic-study: keys from localStorage
+      var keysToRemove = []
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i)
+        if (key.indexOf(LS_PREFIX) === 0) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach(function (k) { localStorage.removeItem(k) })
+      // Re-apply default theme
+      applyTheme('dark')
+      // Reload cards and show onboarding
+      loadCards(true).then(function (newCards) {
+        showOnboarding(newCards)
+      }).catch(function () {
+        showHome(cards)
+      })
+    })
+    resetRow.appendChild(resetLeft)
+    resetRow.appendChild(btnReset)
+    container.appendChild(resetRow)
+
     app.appendChild(container)
 
     // Back button

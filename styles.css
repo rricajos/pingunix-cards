@@ -1253,6 +1253,28 @@ html, body {
   transform: translateX(20px);
 }
 
+.setting-row-danger {
+  border-color: var(--red);
+  border-style: dashed;
+}
+
+.btn-danger {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.btn-danger:hover {
+  opacity: 0.85;
+}
+
 /* === Home action buttons row === */
 
 .home-actions {
