@@ -13,16 +13,22 @@
   var LAST_REVIEW_KEY = LS_PREFIX + 'pwa-last-review'
   var NEW_TODAY_KEY = LS_PREFIX + 'pwa-new-today'
   var DAILY_STATS_KEY = LS_PREFIX + 'pwa-daily-stats'
+  var THEME_KEY = LS_PREFIX + 'pwa-theme'
+  var ONBOARDING_KEY = LS_PREFIX + 'pwa-onboarding-done'
+  var SETTINGS_KEY = LS_PREFIX + 'pwa-settings'
   var CACHE_MAX_AGE = 24 * 60 * 60 * 1000 // 24h
 
   // ── SM-2 quality mappings ──
   var Q_WRONG = 1
   var Q_RIGHT = 4
 
-  // ── New cards daily limit (Improvement 1) ──
-  var NEW_CARDS_PER_DAY = 20
+  // ── Default settings ──
+  var DEFAULT_SETTINGS = {
+    newCardsPerDay: 20,
+    notifications: false
+  }
 
-  // ── Swipe threshold (Improvement 2) ──
+  // ── Swipe threshold ──
   var SWIPE_MIN_DISTANCE = 50
 
   // ── Helpers ──
@@ -69,13 +75,77 @@
     return e
   }
 
+  // ── Settings ──
+  function getSettings() {
+    var s = lsGet(SETTINGS_KEY)
+    if (!s || typeof s !== 'object') return Object.assign({}, DEFAULT_SETTINGS)
+    return Object.assign({}, DEFAULT_SETTINGS, s)
+  }
+
+  function setSettings(s) {
+    lsSet(SETTINGS_KEY, s)
+  }
+
+  // ── Theme management ──
+  function getTheme() {
+    return localStorage.getItem(THEME_KEY) || 'dark'
+  }
+
+  function setTheme(theme) {
+    localStorage.setItem(THEME_KEY, theme)
+    applyTheme(theme)
+  }
+
+  function applyTheme(theme) {
+    if (theme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+    }
+    // Update meta theme-color
+    var meta = document.querySelector('meta[name="theme-color"]')
+    if (meta) {
+      meta.setAttribute('content', theme === 'light' ? '#f4f4f6' : '#284b63')
+    }
+  }
+
+  // ── Escape HTML ──
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+  }
+
+  // ── Markdown-lite rendering (Feature 1) ──
+  function formatCardText(str) {
+    var s = escapeHtml(str)
+    // Inline code: `code` → <code>
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Bold: **text** → <strong>
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Line breaks
+    s = s.replace(/\n/g, '<br>')
+    return s
+  }
+
+  // ── Format time duration ──
+  function formatDuration(ms) {
+    var secs = Math.floor(ms / 1000)
+    var mins = Math.floor(secs / 60)
+    secs = secs % 60
+    if (mins > 0) return mins + 'm ' + secs + 's'
+    return secs + 's'
+  }
+
   // ── Streak tracking ──
   function updateStreak() {
     var today = todayStr()
     var last = localStorage.getItem(LAST_REVIEW_KEY)
     var streak = parseInt(localStorage.getItem(STREAK_KEY)) || 0
 
-    if (last === today) return streak // already counted today
+    if (last === today) return streak
 
     var yesterday = addDays(new Date(), -1)
     if (last === yesterday) {
@@ -96,10 +166,10 @@
     var today = todayStr()
     var yesterday = addDays(new Date(), -1)
     if (last === today || last === yesterday) return streak
-    return 0 // streak broken
+    return 0
   }
 
-  // ── Daily stats tracking (Improvement 5) ──
+  // ── Daily stats tracking ──
   function getDailyStats() {
     var stats = lsGet(DAILY_STATS_KEY)
     if (!stats || typeof stats !== 'object') stats = {}
@@ -120,7 +190,6 @@
       stats[today].wrong++
     }
 
-    // Keep only last 30 days
     var keys = Object.keys(stats).sort()
     while (keys.length > 30) {
       delete stats[keys.shift()]
@@ -129,7 +198,20 @@
     lsSet(DAILY_STATS_KEY, stats)
   }
 
-  // ── New cards today tracking (Improvement 1) ──
+  function revertDailyStats(quality) {
+    var stats = getDailyStats()
+    var today = todayStr()
+    if (!stats[today]) return
+    stats[today].reviewed = Math.max(0, stats[today].reviewed - 1)
+    if (quality >= 3) {
+      stats[today].correct = Math.max(0, stats[today].correct - 1)
+    } else {
+      stats[today].wrong = Math.max(0, stats[today].wrong - 1)
+    }
+    lsSet(DAILY_STATS_KEY, stats)
+  }
+
+  // ── New cards today tracking ──
   function getNewTodayCount() {
     var data = lsGet(NEW_TODAY_KEY)
     var today = todayStr()
@@ -218,17 +300,16 @@
     return s
   }
 
-  // ── Get due cards with new-card limit (Improvement 1) ──
+  // ── Get due cards with new-card limit ──
   function getDueCards(cards, certFilter, subtemaFilters) {
     var today = todayStr()
     var filtered = cards
+    var settings = getSettings()
 
-    // Apply cert filter
     if (certFilter) {
       filtered = filtered.filter(function (c) { return c.cert === certFilter })
     }
 
-    // Apply subtema filter (only when no cert filter is active)
     if (!certFilter && subtemaFilters && subtemaFilters.length > 0) {
       filtered = filtered.filter(function (c) {
         return subtemaFilters.indexOf(c.subtema) !== -1
@@ -249,9 +330,8 @@
       }
     })
 
-    // Limit new cards to remaining daily quota
     var newTodayCount = getNewTodayCount()
-    var remaining = Math.max(0, NEW_CARDS_PER_DAY - newTodayCount)
+    var remaining = Math.max(0, settings.newCardsPerDay - newTodayCount)
     var limitedNew = newCards.slice(0, remaining)
 
     return {
@@ -259,6 +339,50 @@
       new: limitedNew,
       newTotal: newCards.length,
       all: reviewCards.concat(limitedNew)
+    }
+  }
+
+  // ── Notifications (Feature 3) ──
+  function requestNotificationPermission(callback) {
+    if (!('Notification' in window)) {
+      if (callback) callback(false)
+      return
+    }
+    if (Notification.permission === 'granted') {
+      if (callback) callback(true)
+      return
+    }
+    if (Notification.permission === 'denied') {
+      if (callback) callback(false)
+      return
+    }
+    Notification.requestPermission().then(function (perm) {
+      if (callback) callback(perm === 'granted')
+    })
+  }
+
+  function showDueNotification(count) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return
+    var settings = getSettings()
+    if (!settings.notifications) return
+
+    try {
+      new Notification('Pingunix Cards', {
+        body: 'Tienes ' + count + ' tarjetas pendientes de repaso',
+        icon: 'icon-192.png',
+        tag: 'due-reminder'
+      })
+    } catch (e) {
+      // SW notification fallback
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(function (reg) {
+          reg.showNotification('Pingunix Cards', {
+            body: 'Tienes ' + count + ' tarjetas pendientes de repaso',
+            icon: 'icon-192.png',
+            tag: 'due-reminder'
+          })
+        })
+      }
     }
   }
 
@@ -272,18 +396,52 @@
     app.innerHTML = '<div class="error-msg">' + msg + '</div>'
   }
 
+  // ── Onboarding (Feature 6) ──
+  function showOnboarding(cards) {
+    var overlay = el('div', 'onboarding-overlay')
+    var card = el('div', 'onboarding-card')
+
+    card.innerHTML =
+      '<h2>Bienvenido a Pingunix Cards</h2>' +
+      '<div class="onb-item"><span class="onb-icon">&#128073;</span><div class="onb-text">Toca la tarjeta o pulsa <kbd>Espacio</kbd> para voltear</div></div>' +
+      '<div class="onb-item"><span class="onb-icon">&#10060;</span><div class="onb-text"><strong>Me equivoque</strong> &mdash; reinicia el intervalo (tecla <kbd>1</kbd> o swipe izquierda)</div></div>' +
+      '<div class="onb-item"><span class="onb-icon">&#9989;</span><div class="onb-text"><strong>Acierto</strong> &mdash; aumenta el intervalo (tecla <kbd>2</kbd> / <kbd>Espacio</kbd> o swipe derecha)</div></div>' +
+      '<div class="onb-item"><span class="onb-icon">&#128197;</span><div class="onb-text">La repeticion espaciada (SM-2) programa las tarjetas automaticamente</div></div>'
+
+    var btnGo = el('button', 'btn-start', 'Empezar')
+    btnGo.addEventListener('click', function () {
+      lsSet(ONBOARDING_KEY, true)
+      document.body.removeChild(overlay)
+      showHome(cards)
+    })
+    card.appendChild(btnGo)
+
+    overlay.appendChild(card)
+    document.body.appendChild(overlay)
+  }
+
   // ── Home Screen ──
   function showHome(cards) {
     app.innerHTML = ''
 
     var header = el('div', 'header')
     header.innerHTML = '<h1>Pingunix Cards</h1><div class="subtitle">Repaso con repeticion espaciada</div>'
+
+    // Theme toggle (Feature 2)
+    var themeBtn = el('button', 'theme-toggle')
+    themeBtn.textContent = getTheme() === 'dark' ? '\u2600' : '\uD83C\uDF19'
+    themeBtn.title = 'Cambiar tema'
+    themeBtn.addEventListener('click', function () {
+      var next = getTheme() === 'dark' ? 'light' : 'dark'
+      setTheme(next)
+      themeBtn.textContent = next === 'dark' ? '\u2600' : '\uD83C\uDF19'
+    })
+    header.appendChild(themeBtn)
     app.appendChild(header)
 
     var activeCert = null
     var activeSubtemas = []
 
-    // Compute due counts helper
     function computeDue() {
       return getDueCards(cards, activeCert, activeSubtemas)
     }
@@ -294,7 +452,6 @@
     var countEl = el('div', 'due-count', String(dueResult.all.length))
     app.appendChild(countEl)
 
-    // Breakdown label: "X pendientes (Y repaso + Z nuevas)"
     var labelEl = el('div', 'due-label')
     function updateLabel(result) {
       labelEl.innerHTML = result.all.length + ' pendientes' +
@@ -305,7 +462,6 @@
 
     // Cert filter pills
     var pills = el('div', 'cert-pills')
-
     var certKeys = ['lpic-1', 'lpic-2', 'lpic-3']
     var certs = [{ key: null, label: 'Todas' }]
     certKeys.forEach(function (k) {
@@ -321,7 +477,6 @@
       btnStart.textContent = 'Comenzar repaso (' + result.all.length + ' tarjetas)'
       btnStart.disabled = result.all.length === 0
 
-      // Also refresh cert pill counts
       pillEls.forEach(function (p, pi) {
         var cr = getDueCards(cards, certs[pi].key, certs[pi].key ? [] : activeSubtemas)
         p.innerHTML = certs[pi].label + '<span class="count">' + cr.all.length + '</span>'
@@ -343,16 +498,14 @@
     })
     app.appendChild(pills)
 
-    // ── Subtema filter (Improvement 4) ──
+    // Subtema filter
     var subtemaSection = el('div', 'subtema-section')
-
     var subtemaToggle = el('button', 'subtema-toggle', 'Filtrar por tema')
     subtemaToggle.addEventListener('click', function () {
       subtemaSection.classList.toggle('open')
     })
     subtemaSection.appendChild(subtemaToggle)
 
-    // Gather unique subtemas grouped by cert
     var subtemaByCert = {}
     cards.forEach(function (c) {
       if (!subtemaByCert[c.cert]) subtemaByCert[c.cert] = {}
@@ -364,12 +517,9 @@
 
     certKeys.forEach(function (certKey) {
       if (!subtemaByCert[certKey]) return
-
-      // Group label
       var groupLabel = el('div', 'subtema-group', certKey.toUpperCase())
       subtemaScrollable.appendChild(groupLabel)
 
-      // Pills container
       var groupPills = el('div', 'pills')
       var subtemas = Object.keys(subtemaByCert[certKey]).sort(function (a, b) {
         var partsA = a.split('.').map(Number)
@@ -401,7 +551,6 @@
       subtemaScrollable.appendChild(groupPills)
     })
 
-    // Clear filters button
     var btnClear = el('button', 'btn-clear-filters', 'Limpiar filtros')
     btnClear.addEventListener('click', function () {
       activeSubtemas = []
@@ -413,14 +562,13 @@
     subtemaSection.appendChild(subtemaScrollable)
     app.appendChild(subtemaSection)
 
-    // Start button (shows card count)
+    // Start button
     var btnStart = el('button', 'btn-start', 'Comenzar repaso (' + dueResult.all.length + ' tarjetas)')
     btnStart.disabled = dueResult.all.length === 0
     btnStart.addEventListener('click', function () {
       var result = computeDue()
       if (result.all.length === 0) return
 
-      // Track new cards introduced today (Improvement 1)
       result.new.forEach(function () {
         incrementNewToday()
       })
@@ -445,13 +593,22 @@
       '<div class="stat"><div class="stat-num">' + cards.length + '</div><div class="stat-label">total tarjetas</div></div>'
     app.appendChild(stats)
 
-    // ── Statistics button (Improvement 5) ──
+    // Action buttons row
+    var actions = el('div', 'home-actions')
+
+    var btnSearch = el('button', 'btn-update', 'Buscar')
+    btnSearch.addEventListener('click', function () { showSearch(cards) })
+    actions.appendChild(btnSearch)
+
     var btnStats = el('button', 'btn-update', 'Estadisticas')
-    btnStats.style.marginTop = '16px'
-    btnStats.addEventListener('click', function () {
-      showStatistics(cards)
-    })
-    app.appendChild(btnStats)
+    btnStats.addEventListener('click', function () { showStatistics(cards) })
+    actions.appendChild(btnStats)
+
+    var btnSettings = el('button', 'btn-update', 'Ajustes')
+    btnSettings.addEventListener('click', function () { showSettings(cards) })
+    actions.appendChild(btnSettings)
+
+    app.appendChild(actions)
 
     // Update button
     var btnUpdate = el('button', 'btn-update', 'Actualizar tarjetas')
@@ -467,7 +624,7 @@
     })
     app.appendChild(btnUpdate)
 
-    // ── Export/Import (Improvement 6) ──
+    // Export/Import
     var dataActions = el('div', 'data-actions')
 
     var btnExport = el('button', 'btn-data', 'Exportar progreso')
@@ -522,7 +679,6 @@
                 localStorage.setItem(key, JSON.stringify(val))
               }
             })
-            // Reload home
             loadCards(false).then(function (newCards) {
               showHome(newCards)
             }).catch(function () {
@@ -540,9 +696,181 @@
     dataActions.appendChild(btnExport)
     dataActions.appendChild(btnImport)
     app.appendChild(dataActions)
+
+    // Fire notification if due cards exist
+    if (dueResult.all.length > 0) {
+      showDueNotification(dueResult.all.length)
+    }
   }
 
-  // ── Statistics Screen (Improvement 5) ──
+  // ── Search Screen (Feature 7) ──
+  function showSearch(cards) {
+    app.innerHTML = ''
+
+    var header = el('div', 'header')
+    header.innerHTML = '<h1>Buscar tarjetas</h1>'
+    app.appendChild(header)
+
+    var searchContainer = el('div', 'search-container')
+    var searchIcon = el('span', 'search-icon', '\uD83D\uDD0D')
+    var searchInput = el('input', 'search-input')
+    searchInput.type = 'text'
+    searchInput.placeholder = 'Buscar por texto, comando, tema...'
+    searchInput.setAttribute('autocomplete', 'off')
+    searchContainer.appendChild(searchIcon)
+    searchContainer.appendChild(searchInput)
+    app.appendChild(searchContainer)
+
+    var countEl = el('div', 'search-count')
+    app.appendChild(countEl)
+
+    var resultsEl = el('div', 'search-results')
+    app.appendChild(resultsEl)
+
+    var detailEl = el('div', 'search-detail')
+    detailEl.style.display = 'none'
+    app.appendChild(detailEl)
+
+    var btnBack = el('button', 'btn-secondary', 'Volver')
+    btnBack.addEventListener('click', function () {
+      loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+    })
+    app.appendChild(btnBack)
+
+    function doSearch() {
+      var q = searchInput.value.trim().toLowerCase()
+      detailEl.style.display = 'none'
+      resultsEl.innerHTML = ''
+
+      if (q.length < 2) {
+        countEl.textContent = 'Escribe al menos 2 caracteres'
+        return
+      }
+
+      var matches = cards.filter(function (c) {
+        return c.q.toLowerCase().indexOf(q) !== -1 ||
+               c.a.toLowerCase().indexOf(q) !== -1 ||
+               c.subtema.toLowerCase().indexOf(q) !== -1
+      })
+
+      countEl.textContent = matches.length + ' resultado' + (matches.length !== 1 ? 's' : '')
+
+      var shown = matches.slice(0, 50)
+      shown.forEach(function (c) {
+        var card = el('div', 'search-result-card')
+        card.innerHTML =
+          '<div class="search-result-q">' + escapeHtml(c.q) + '</div>' +
+          '<div class="search-result-meta">' + c.cert.toUpperCase() + ' &middot; ' + c.subtema + '</div>'
+        card.addEventListener('click', function () {
+          detailEl.style.display = ''
+          detailEl.innerHTML =
+            '<div class="card-label">Pregunta</div>' +
+            '<div class="card-text">' + formatCardText(c.q) + '</div>' +
+            '<hr>' +
+            '<div class="card-label">Respuesta</div>' +
+            '<div class="card-text">' + formatCardText(c.a) + '</div>' +
+            '<div class="card-meta">' + c.cert.toUpperCase() + ' &middot; ' + c.subtema + '</div>'
+          detailEl.scrollIntoView({ behavior: 'smooth' })
+        })
+        resultsEl.appendChild(card)
+      })
+
+      if (matches.length > 50) {
+        countEl.textContent += ' (mostrando primeros 50)'
+      }
+    }
+
+    var searchTimer = null
+    searchInput.addEventListener('input', function () {
+      clearTimeout(searchTimer)
+      searchTimer = setTimeout(doSearch, 200)
+    })
+
+    searchInput.focus()
+  }
+
+  // ── Settings Screen (Feature 8 + 3) ──
+  function showSettings(cards) {
+    app.innerHTML = ''
+
+    var header = el('div', 'header')
+    header.innerHTML = '<h1>Ajustes</h1>'
+    app.appendChild(header)
+
+    var container = el('div', 'settings-screen')
+    var settings = getSettings()
+
+    // Daily limit
+    var limitRow = el('div', 'setting-row')
+    var limitLeft = el('div')
+    limitLeft.innerHTML = '<div class="setting-label">Tarjetas nuevas por dia</div><div class="setting-desc">Limite de tarjetas nuevas introducidas cada dia</div>'
+    var limitInput = el('input', 'setting-input')
+    limitInput.type = 'number'
+    limitInput.min = '1'
+    limitInput.max = '200'
+    limitInput.value = settings.newCardsPerDay
+    limitInput.addEventListener('change', function () {
+      var val = parseInt(limitInput.value)
+      if (isNaN(val) || val < 1) val = 1
+      if (val > 200) val = 200
+      limitInput.value = val
+      settings.newCardsPerDay = val
+      setSettings(settings)
+    })
+    limitRow.appendChild(limitLeft)
+    limitRow.appendChild(limitInput)
+    container.appendChild(limitRow)
+
+    // Notifications toggle
+    var notifRow = el('div', 'setting-row')
+    var notifLeft = el('div')
+    notifLeft.innerHTML = '<div class="setting-label">Notificaciones</div><div class="setting-desc">Recordatorio al abrir la app con tarjetas pendientes</div>'
+    var notifToggle = el('button', 'setting-toggle' + (settings.notifications ? ' active' : ''))
+    notifToggle.addEventListener('click', function () {
+      if (!settings.notifications) {
+        // Enabling: request permission first
+        requestNotificationPermission(function (granted) {
+          if (granted) {
+            settings.notifications = true
+            setSettings(settings)
+            notifToggle.classList.add('active')
+          } else {
+            alert('Permiso de notificaciones denegado. Activalo en los ajustes del navegador.')
+          }
+        })
+      } else {
+        settings.notifications = false
+        setSettings(settings)
+        notifToggle.classList.remove('active')
+      }
+    })
+    notifRow.appendChild(notifLeft)
+    notifRow.appendChild(notifToggle)
+    container.appendChild(notifRow)
+
+    // Theme info
+    var themeRow = el('div', 'setting-row')
+    var themeLeft = el('div')
+    themeLeft.innerHTML = '<div class="setting-label">Tema</div><div class="setting-desc">Usa el icono en la esquina superior derecha para cambiar</div>'
+    var themeIndicator = el('span', '', getTheme() === 'dark' ? 'Oscuro' : 'Claro')
+    themeIndicator.style.color = 'var(--text-dim)'
+    themeIndicator.style.fontSize = '14px'
+    themeRow.appendChild(themeLeft)
+    themeRow.appendChild(themeIndicator)
+    container.appendChild(themeRow)
+
+    app.appendChild(container)
+
+    // Back button
+    var btnBack = el('button', 'btn-secondary', 'Volver')
+    btnBack.style.marginTop = '24px'
+    btnBack.addEventListener('click', function () {
+      loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+    })
+    app.appendChild(btnBack)
+  }
+
+  // ── Statistics Screen ──
   function showStatistics(cards) {
     app.innerHTML = ''
 
@@ -552,7 +880,7 @@
 
     var container = el('div', 'stats-screen')
 
-    // a) Today stats
+    // Today stats
     var dailyStats = getDailyStats()
     var today = todayStr()
     var todayData = dailyStats[today] || { reviewed: 0, correct: 0, wrong: 0 }
@@ -565,13 +893,12 @@
       '<div>Precision: <strong>' + accuracyToday + '%</strong></div>'
     container.appendChild(todaySection)
 
-    // b) Last 7 days bar chart
+    // Last 7 days bar chart
     var histSection = el('div', 'stats-section')
     var histTitle = el('h3', '', 'Historial (ultimos 7 dias)')
     histSection.appendChild(histTitle)
 
     var chartDiv = el('div', 'bar-chart')
-
     var days = []
     for (var i = 6; i >= 0; i--) {
       days.push(addDays(new Date(), -i))
@@ -596,7 +923,7 @@
     histSection.appendChild(chartDiv)
     container.appendChild(histSection)
 
-    // c) Maturity
+    // Maturity
     var matNew = 0
     var matLearning = 0
     var matMature = 0
@@ -631,7 +958,7 @@
       '</div>'
     container.appendChild(matSection)
 
-    // d) Per certification
+    // Per certification
     var certBreakdown = {}
     cards.forEach(function (c) {
       if (!certBreakdown[c.cert]) {
@@ -660,7 +987,6 @@
 
     app.appendChild(container)
 
-    // Back button
     var btnBack = el('button', 'btn-secondary', 'Volver')
     btnBack.style.marginTop = '24px'
     btnBack.addEventListener('click', function () {
@@ -675,7 +1001,11 @@
     var idx = 0
     var isFlipped = false
     var results = [] // { id, quality }
-    var ratingInProgress = false // prevent double-rating during toast delay
+    var ratingInProgress = false
+    var sessionStart = Date.now() // Feature 5: session timer
+
+    // Undo state (Feature 4)
+    var lastUndoState = null // { cardId, prevState, quality, resultIdx }
 
     // Header
     var reviewHeader = el('div', 'review-header')
@@ -701,7 +1031,7 @@
     card.appendChild(back)
     cardArea.appendChild(card)
 
-    // Interval toast (Improvement 3) — positioned over the card area
+    // Interval toast
     var intervalToast = el('div', 'interval-toast')
     intervalToast.style.display = 'none'
     cardArea.appendChild(intervalToast)
@@ -711,6 +1041,26 @@
     // Flip hint
     var flipHint = el('div', 'flip-hint', 'Toca la tarjeta o pulsa espacio para voltear')
     app.appendChild(flipHint)
+
+    // Undo bar (Feature 4)
+    var undoBar = el('div', 'undo-bar')
+    var btnUndo = el('button', 'btn-undo', 'Deshacer')
+    btnUndo.addEventListener('click', function () {
+      if (!lastUndoState) return
+      // Restore previous SM-2 state
+      lsSet(FC_PREFIX + lastUndoState.cardId, lastUndoState.prevState)
+      // Revert daily stats
+      revertDailyStats(lastUndoState.quality)
+      // Remove from results
+      results.splice(lastUndoState.resultIdx, 1)
+      // Go back to previous card
+      idx = lastUndoState.resultIdx
+      lastUndoState = null
+      btnUndo.classList.remove('visible')
+      display()
+    })
+    undoBar.appendChild(btnUndo)
+    app.appendChild(undoBar)
 
     // Rating buttons
     var ratingArea = el('div', 'rating-area hidden')
@@ -724,7 +1074,7 @@
 
     function display() {
       if (idx >= dueCards.length) {
-        showSummary(allCards, dueCards, results)
+        showSummary(allCards, dueCards, results, sessionStart)
         return
       }
       var c = dueCards[idx]
@@ -739,12 +1089,12 @@
 
       front.innerHTML =
         '<div class="card-label">Pregunta</div>' +
-        '<div class="card-text">' + escapeHtml(c.q) + '</div>' +
+        '<div class="card-text">' + formatCardText(c.q) + '</div>' +
         '<div class="card-meta">' + c.subtema + '</div>'
 
       back.innerHTML =
         '<div class="card-label">Respuesta</div>' +
-        '<div class="card-text">' + escapeHtml(c.a) + '</div>' +
+        '<div class="card-text">' + formatCardText(c.a) + '</div>' +
         '<div class="card-meta">' + c.subtema + '</div>'
 
       var pct = dueCards.length > 0 ? Math.round((idx / dueCards.length) * 100) : 0
@@ -765,13 +1115,44 @@
       ratingInProgress = true
 
       var c = dueCards[idx]
+
+      // Save state before rating for undo (Feature 4)
+      var prevState = getCardState(c.id)
+      // Deep copy
+      prevState = JSON.parse(JSON.stringify(prevState))
+
       var newState = rateCard(c.id, quality)
+      var resultIdx = results.length
       results.push({ id: c.id, quality: quality })
 
-      // Update daily stats (Improvement 5)
       updateDailyStats(quality)
 
-      // Show interval toast (Improvement 3)
+      // Store undo state
+      lastUndoState = {
+        cardId: c.id,
+        prevState: prevState,
+        quality: quality,
+        resultIdx: resultIdx
+      }
+
+      // Show undo briefly
+      btnUndo.classList.add('visible')
+      setTimeout(function () {
+        // Hide undo after moving to next card (unless another undo replaces it)
+        if (lastUndoState && lastUndoState.resultIdx === resultIdx) {
+          // Keep visible until next rating or 5 seconds
+        }
+      }, 0)
+
+      // Auto-hide undo after 5 seconds
+      var undoTimeout = setTimeout(function () {
+        if (lastUndoState && lastUndoState.resultIdx === resultIdx) {
+          btnUndo.classList.remove('visible')
+          lastUndoState = null
+        }
+      }, 5000)
+
+      // Show interval toast
       var toastMsg = ''
       if (quality < 3) {
         toastMsg = 'Repetir ma\u00F1ana'
@@ -780,7 +1161,6 @@
       }
       intervalToast.textContent = toastMsg
       intervalToast.style.display = ''
-      // Re-trigger CSS animation by removing and re-adding the element
       var parent = intervalToast.parentNode
       parent.removeChild(intervalToast)
       intervalToast = el('div', 'interval-toast')
@@ -793,7 +1173,7 @@
       }, 600)
     }
 
-    // ── Swipe gestures (Improvement 2) ──
+    // Swipe gestures
     var touchStartX = 0
     var isSwiping = false
 
@@ -809,7 +1189,6 @@
       var touch = e.touches[0]
       var dx = touch.clientX - touchStartX
 
-      // Visual feedback during swipe
       if (dx > 20) {
         card.classList.add('card-swipe-right')
         card.classList.remove('card-swipe-left')
@@ -833,12 +1212,10 @@
 
       if (Math.abs(dx) >= SWIPE_MIN_DISTANCE) {
         if (dx > 0) {
-          // Swipe right = correct
           card.classList.add('card-swipe-right')
           card.classList.remove('card-swipe-left')
           rate(Q_RIGHT)
         } else {
-          // Swipe left = wrong
           card.classList.add('card-swipe-left')
           card.classList.remove('card-swipe-right')
           rate(Q_WRONG)
@@ -861,6 +1238,10 @@
         if (isFlipped) rate(Q_WRONG)
       } else if (e.key === '2') {
         if (isFlipped) rate(Q_RIGHT)
+      } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+        // Ctrl+Z / Cmd+Z = undo
+        e.preventDefault()
+        if (lastUndoState) btnUndo.click()
       } else if (e.key === 'Escape') {
         showHome(allCards)
       }
@@ -868,7 +1249,6 @@
 
     document.addEventListener('keydown', onKey)
 
-    // Clean up key listener when leaving review
     var origInner = app.innerHTML
     var observer = new MutationObserver(function () {
       if (app.innerHTML !== origInner) {
@@ -883,16 +1263,18 @@
   }
 
   // ── Summary Screen ──
-  function showSummary(allCards, dueCards, results) {
+  function showSummary(allCards, dueCards, results, sessionStart) {
     app.innerHTML = ''
 
     var good = results.filter(function (r) { return r.quality >= 3 }).length
     var wrong = results.filter(function (r) { return r.quality < 3 }).length
+    var elapsed = Date.now() - sessionStart
 
     var summary = el('div', 'summary')
 
     summary.innerHTML =
       '<h2>Sesion completada</h2>' +
+      '<div class="session-time">Duracion: ' + formatDuration(elapsed) + '</div>' +
       '<div class="summary-stats">' +
         '<div class="summary-stat"><div class="summary-num green">' + good + '</div><div class="summary-label">Aciertos</div></div>' +
         '<div class="summary-stat"><div class="summary-num red">' + wrong + '</div><div class="summary-label">Fallos</div></div>' +
@@ -904,7 +1286,6 @@
     var actions = el('div', 'summary-actions')
     summary.appendChild(actions)
 
-    // Retry wrong cards
     if (wrong > 0) {
       var wrongCards = []
       results.forEach(function (r) {
@@ -925,15 +1306,6 @@
     var btnHome = el('button', 'btn-secondary', 'Volver al inicio')
     btnHome.addEventListener('click', function () { showHome(allCards) })
     actions.appendChild(btnHome)
-  }
-
-  // ── Escape HTML ──
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
   }
 
   // ── Offline indicator ──
@@ -961,11 +1333,17 @@
   function init() {
     registerSW()
     setupOffline()
+    applyTheme(getTheme())
     showLoading()
 
     loadCards(false)
       .then(function (cards) {
-        showHome(cards)
+        // Check onboarding (Feature 6)
+        if (!lsGet(ONBOARDING_KEY)) {
+          showOnboarding(cards)
+        } else {
+          showHome(cards)
+        }
       })
       .catch(function (err) {
         showError(err.message)

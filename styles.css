@@ -25,6 +25,21 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Light theme */
+:root[data-theme="light"] {
+  --bg: #f4f4f6;
+  --surface: #ffffff;
+  --border: #d8d8dc;
+  --text: #1a1a1c;
+  --text-dim: #6b6b6e;
+  --primary: #4a7a8f;
+  --accent: #5a8a7d;
+  --red: #c62828;
+  --red-bg: #ffebee;
+  --green: #2e7d32;
+  --green-bg: #e8f5e9;
+}
+
 html, body {
   height: 100%;
   background: var(--bg);
@@ -372,15 +387,13 @@ html, body {
   justify-content: center;
   perspective: 1200px;
   padding: 12px 0;
-  min-height: 50vh;
   position: relative;
 }
 
 .card {
   width: 100%;
-  height: 100%;
-  min-height: 240px;
   position: relative;
+  display: grid;
   transform-style: preserve-3d;
   transition: transform 0.4s ease;
   cursor: pointer;
@@ -439,8 +452,8 @@ html, body {
 }
 
 .card-face {
-  position: absolute;
-  inset: 0;
+  grid-row: 1;
+  grid-column: 1;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   border-radius: var(--radius);
@@ -450,6 +463,7 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  max-height: 65vh;
   overflow-y: auto;
   transition: box-shadow 0.35s ease;
 }
@@ -913,6 +927,342 @@ html, body {
   color: var(--red);
 }
 
+/* === Card text formatting (markdown) === */
+
+.card-text code {
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.88em;
+  word-break: break-all;
+}
+
+/* === Theme Toggle === */
+
+.theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.theme-toggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.header { position: relative; }
+
+/* === Onboarding Overlay === */
+
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.onboarding-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 28px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+
+.onboarding-card h2 {
+  font-size: 20px;
+  margin-bottom: 20px;
+  color: var(--primary);
+}
+
+.onboarding-card .onb-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.onboarding-card .onb-item:last-of-type {
+  border-bottom: none;
+}
+
+.onboarding-card .onb-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+
+.onboarding-card .onb-text {
+  line-height: 1.4;
+}
+
+.onboarding-card .onb-text kbd {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.onboarding-card .btn-start {
+  margin-top: 24px;
+}
+
+/* === Search === */
+
+.search-container {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px 12px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.search-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.search-result-card:hover {
+  border-color: var(--primary);
+}
+
+.search-result-q {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.search-result-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.search-count {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.search-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 16px;
+}
+
+.search-detail .card-label {
+  margin-bottom: 8px;
+}
+
+.search-detail .card-text {
+  margin-bottom: 16px;
+}
+
+.search-detail hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* === Undo Button === */
+
+.undo-bar {
+  display: flex;
+  justify-content: center;
+  padding: 0 0 8px;
+  flex-shrink: 0;
+}
+
+.btn-undo {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.btn-undo.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-undo:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* === Session Timer === */
+
+.session-time {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+/* === Settings Screen === */
+
+.settings-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0 32px;
+}
+
+.setting-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.setting-label {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.setting-input {
+  width: 72px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  text-align: center;
+  outline: none;
+}
+
+.setting-input:focus {
+  border-color: var(--primary);
+}
+
+.setting-toggle {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  background: var(--border);
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.setting-toggle.active {
+  background: var(--primary);
+}
+
+.setting-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.setting-toggle.active::after {
+  transform: translateX(20px);
+}
+
+/* === Home action buttons row === */
+
+.home-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
 /* === Responsive === */
 
 /* Tablet */
@@ -927,9 +1277,7 @@ html, body {
 
   .due-count { font-size: 56px; }
 
-  .card-area { min-height: 55vh; }
-  .card { min-height: 300px; }
-  .card-face { padding: 32px 36px; }
+  .card-face { padding: 32px 36px; max-height: 68vh; }
   .card-label { font-size: 12px; margin-bottom: 16px; }
   .card-text { font-size: 19px; line-height: 1.7; }
   .card-meta { font-size: 13px; margin-top: 16px; }
@@ -968,9 +1316,7 @@ html, body {
   .cert-pills { gap: 10px; margin-bottom: 36px; }
   .cert-pill { padding: 8px 18px; font-size: 14px; }
 
-  .card-area { min-height: 58vh; }
-  .card { min-height: 340px; }
-  .card-face { padding: 40px 48px; border-radius: 16px; }
+  .card-face { padding: 40px 48px; border-radius: 16px; max-height: 70vh; }
   .card-label { font-size: 13px; letter-spacing: 1.2px; }
   .card-text { font-size: 20px; line-height: 1.75; }
   .card-meta { font-size: 14px; }
@@ -1024,7 +1370,7 @@ html, body {
 
 /* Landscape mobile — keep card visible */
 @media (max-height: 500px) and (orientation: landscape) {
-  .card-area { min-height: 40vh; }
+  .card-face { max-height: 50vh; }
   .header { padding: 12px 0 8px; }
   .review-header { padding: 8px 0; }
   .progress-bar { margin-bottom: 8px; }
