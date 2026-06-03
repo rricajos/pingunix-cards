@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v1'
+const CACHE_VERSION = 'v2'
 const CACHE_NAME = 'pingunix-cards-' + CACHE_VERSION
 const DATA_CACHE = 'pingunix-cards-data-' + CACHE_VERSION
 

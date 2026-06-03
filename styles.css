@@ -38,10 +38,11 @@ html, body {
 
 #app {
   min-height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: var(--safe-top) 16px var(--safe-bottom);
-  max-width: 480px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
@@ -311,6 +312,7 @@ html, body {
   justify-content: space-between;
   align-items: center;
   padding: 16px 0 12px;
+  flex-shrink: 0;
 }
 
 .review-progress-text {
@@ -328,8 +330,20 @@ html, body {
   color: var(--text-dim);
   font-size: 24px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 8px 12px;
   line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.btn-close:hover {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .progress-bar {
@@ -338,6 +352,7 @@ html, body {
   border-radius: 2px;
   margin-bottom: 20px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .progress-fill {
@@ -355,14 +370,15 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  perspective: 1000px;
-  padding: 8px 0;
-  min-height: 280px;
+  perspective: 1200px;
+  padding: 12px 0;
+  min-height: 50vh;
   position: relative;
 }
 
 .card {
   width: 100%;
+  height: 100%;
   min-height: 240px;
   position: relative;
   transform-style: preserve-3d;
@@ -430,7 +446,7 @@ html, body {
   border-radius: var(--radius);
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 24px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -456,8 +472,8 @@ html, body {
 }
 
 .card-text {
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 17px;
+  line-height: 1.65;
   word-break: break-word;
 }
 
@@ -473,6 +489,7 @@ html, body {
   font-size: 13px;
   color: var(--text-dim);
   padding: 8px 0 4px;
+  flex-shrink: 0;
 }
 
 .flip-hint.hidden {
@@ -523,7 +540,8 @@ html, body {
 .rating-area {
   display: flex;
   gap: 12px;
-  padding: 12px 0 24px;
+  padding: 16px 0 24px;
+  flex-shrink: 0;
 }
 
 .rating-area.hidden {
@@ -897,7 +915,119 @@ html, body {
 
 /* === Responsive === */
 
+/* Tablet */
 @media (min-width: 600px) {
-  .card-area { min-height: 320px; }
-  .card-text { font-size: 18px; }
+  #app {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .header h1 { font-size: 24px; }
+  .header .subtitle { font-size: 14px; }
+
+  .due-count { font-size: 56px; }
+
+  .card-area { min-height: 55vh; }
+  .card { min-height: 300px; }
+  .card-face { padding: 32px 36px; }
+  .card-label { font-size: 12px; margin-bottom: 16px; }
+  .card-text { font-size: 19px; line-height: 1.7; }
+  .card-meta { font-size: 13px; margin-top: 16px; }
+
+  .flip-hint { font-size: 14px; }
+
+  .btn-wrong,
+  .btn-right {
+    padding: 18px;
+    font-size: 17px;
+  }
+
+  .btn-start { padding: 18px; font-size: 18px; }
+
+  .stat-num { font-size: 26px; }
+  .stat-label { font-size: 13px; }
+
+  .summary-num { font-size: 42px; }
+  .summary-label { font-size: 14px; }
+}
+
+/* Desktop */
+@media (min-width: 900px) {
+  #app {
+    max-width: 720px;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .header { padding: 32px 0 20px; }
+  .header h1 { font-size: 26px; }
+
+  .due-count { font-size: 64px; margin: 32px 0 8px; }
+  .due-label { font-size: 16px; }
+
+  .cert-pills { gap: 10px; margin-bottom: 36px; }
+  .cert-pill { padding: 8px 18px; font-size: 14px; }
+
+  .card-area { min-height: 58vh; }
+  .card { min-height: 340px; }
+  .card-face { padding: 40px 48px; border-radius: 16px; }
+  .card-label { font-size: 13px; letter-spacing: 1.2px; }
+  .card-text { font-size: 20px; line-height: 1.75; }
+  .card-meta { font-size: 14px; }
+
+  .flip-hint { font-size: 15px; padding: 12px 0; }
+
+  .btn-wrong,
+  .btn-right {
+    padding: 20px;
+    font-size: 18px;
+    border-radius: 14px;
+  }
+
+  .btn-start { padding: 20px; font-size: 19px; border-radius: 14px; }
+  .btn-secondary { padding: 16px; font-size: 17px; }
+
+  .stats-row { gap: 40px; margin-top: 40px; padding-top: 24px; }
+  .stat-num { font-size: 28px; }
+  .stat-label { font-size: 14px; }
+
+  .stats-section { padding: 24px; }
+  .stats-section h3 { font-size: 17px; }
+
+  .summary h2 { font-size: 26px; }
+  .summary-stats { gap: 48px; }
+  .summary-num { font-size: 48px; }
+  .summary-label { font-size: 15px; }
+
+  .review-header { padding: 20px 0 16px; }
+  .review-progress-text { font-size: 15px; }
+  .progress-bar { height: 5px; margin-bottom: 24px; }
+
+  .rating-area { gap: 16px; padding: 20px 0 32px; }
+}
+
+/* Wide desktop */
+@media (min-width: 1200px) {
+  #app { max-width: 800px; }
+  .card-face { padding: 48px 56px; }
+  .card-text { font-size: 21px; }
+}
+
+/* Small phones */
+@media (max-width: 380px) {
+  #app { padding-left: 12px; padding-right: 12px; }
+  .due-count { font-size: 40px; }
+  .card-face { padding: 16px 18px; }
+  .card-text { font-size: 15px; }
+  .btn-wrong, .btn-right { padding: 14px; font-size: 15px; }
+}
+
+/* Landscape mobile — keep card visible */
+@media (max-height: 500px) and (orientation: landscape) {
+  .card-area { min-height: 40vh; }
+  .header { padding: 12px 0 8px; }
+  .review-header { padding: 8px 0; }
+  .progress-bar { margin-bottom: 8px; }
+  .flip-hint { padding: 4px 0; }
+  .rating-area { padding: 8px 0 12px; }
 }
