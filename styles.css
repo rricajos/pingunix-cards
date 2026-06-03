@@ -1,0 +1,466 @@
+/* === Pingunix Cards — Lightweight Flashcard PWA === */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #161618;
+  --surface: #1e1e21;
+  --border: #2a2a2e;
+  --text: #ebebec;
+  --text-dim: #9e9ea0;
+  --primary: #7b97aa;
+  --accent: #84a59d;
+  --red: #e05252;
+  --red-bg: #3a1c1c;
+  --green: #4caf50;
+  --green-bg: #1c3a1e;
+  --radius: 12px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--safe-top) 16px var(--safe-bottom);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* === Header === */
+
+.header {
+  text-align: center;
+  padding: 24px 0 16px;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  letter-spacing: -0.3px;
+}
+
+.header .subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* === Home Screen === */
+
+.due-count {
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  margin: 24px 0 4px;
+  color: var(--text);
+}
+
+.due-label {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.cert-pills {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.cert-pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cert-pill:hover, .cert-pill.active {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cert-pill .count {
+  font-weight: 600;
+  color: var(--text);
+  margin-left: 4px;
+}
+
+.cert-pill.active .count {
+  color: var(--primary);
+}
+
+.btn-start {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-start:hover {
+  opacity: 0.9;
+}
+
+.btn-start:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+.btn-update {
+  display: block;
+  margin: 24px auto 0;
+  padding: 8px 16px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.btn-update:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* === Review Screen === */
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0 12px;
+}
+
+.review-progress-text {
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.review-progress-text strong {
+  color: var(--text);
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+/* === Card === */
+
+.card-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
+  padding: 8px 0;
+  min-height: 280px;
+}
+
+.card {
+  width: 100%;
+  min-height: 240px;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.4s ease;
+  cursor: pointer;
+}
+
+.card.flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.card-front {
+  /* default: visible */
+}
+
+.card-back {
+  transform: rotateY(180deg);
+}
+
+.card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.card-text {
+  font-size: 16px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.card-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 12px;
+  text-align: right;
+}
+
+.flip-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 8px 0 4px;
+}
+
+.flip-hint.hidden {
+  visibility: hidden;
+}
+
+/* === Rating Buttons === */
+
+.rating-area {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0 24px;
+}
+
+.rating-area.hidden {
+  visibility: hidden;
+}
+
+.btn-wrong,
+.btn-right {
+  flex: 1;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.15s;
+}
+
+.btn-wrong:active,
+.btn-right:active {
+  transform: scale(0.97);
+}
+
+.btn-wrong {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.btn-right {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+
+/* === Summary Screen === */
+
+.summary {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.summary h2 {
+  font-size: 22px;
+  margin-bottom: 24px;
+}
+
+.summary-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.summary-stat {
+  text-align: center;
+}
+
+.summary-num {
+  font-size: 36px;
+  font-weight: 700;
+}
+
+.summary-num.green { color: var(--green); }
+.summary-num.red { color: var(--red); }
+
+.summary-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+.summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.btn-secondary {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--primary);
+}
+
+/* === Offline Bar === */
+
+#offline-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--red-bg);
+  color: var(--red);
+  text-align: center;
+  padding: 8px;
+  font-size: 13px;
+  z-index: 100;
+  transition: transform 0.3s;
+  padding-bottom: calc(8px + var(--safe-bottom));
+}
+
+#offline-bar.hidden {
+  transform: translateY(100%);
+}
+
+/* === Loading === */
+
+.loading {
+  text-align: center;
+  padding: 48px 0;
+  color: var(--text-dim);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* === Error === */
+
+.error-msg {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--red);
+}
+
+/* === Responsive === */
+
+@media (min-width: 600px) {
+  .card-area { min-height: 320px; }
+  .card-text { font-size: 18px; }
+}
