@@ -342,6 +342,28 @@
     }
   }
 
+  // ── Haptic feedback ──
+  function vibrate(ms) {
+    if (navigator.vibrate) navigator.vibrate(ms || 10)
+  }
+
+  // ── Forecast: cards due in future days ──
+  function getForecast(cards) {
+    var counts = { d1: 0, d3: 0, d7: 0 }
+    var tomorrow = addDays(new Date(), 1)
+    var in3 = addDays(new Date(), 3)
+    var in7 = addDays(new Date(), 7)
+    cards.forEach(function (c) {
+      var s = getCardState(c.id)
+      var nr = s.nextReview
+      if (!nr) return
+      if (nr <= tomorrow) counts.d1++
+      if (nr <= in3) counts.d3++
+      if (nr <= in7) counts.d7++
+    })
+    return counts
+  }
+
   // ── Notifications (Feature 3) ──
   function requestNotificationPermission(callback) {
     if (!('Notification' in window)) {
@@ -386,6 +408,26 @@
     }
   }
 
+  // ── PWA Install Prompt ──
+  var deferredInstallPrompt = null
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault()
+    deferredInstallPrompt = e
+  })
+
+  // ── Screen transitions ──
+  function transitionTo(renderFn) {
+    app.classList.add('screen-exit')
+    setTimeout(function () {
+      renderFn()
+      app.classList.remove('screen-exit')
+      app.classList.add('screen-enter')
+      setTimeout(function () {
+        app.classList.remove('screen-enter')
+      }, 250)
+    }, 150)
+  }
+
   // ── Screens ──
 
   function showLoading() {
@@ -423,15 +465,19 @@
   // ── Home Screen ──
   function showHome(cards) {
     app.innerHTML = ''
+    app.setAttribute('role', 'main')
+    app.setAttribute('aria-label', 'Pingunix Cards')
 
     var header = el('div', 'header')
+    header.setAttribute('role', 'banner')
     header.innerHTML = '<h1>Pingunix Cards</h1><div class="subtitle">Repaso con repeticion espaciada</div>'
 
-    // Theme toggle (Feature 2)
+    // Theme toggle
     var themeBtn = el('button', 'theme-toggle')
     themeBtn.textContent = getTheme() === 'dark' ? '\u2600' : '\uD83C\uDF19'
-    themeBtn.title = 'Cambiar tema'
+    themeBtn.setAttribute('aria-label', 'Cambiar tema')
     themeBtn.addEventListener('click', function () {
+      vibrate(10)
       var next = getTheme() === 'dark' ? 'light' : 'dark'
       setTheme(next)
       themeBtn.textContent = next === 'dark' ? '\u2600' : '\uD83C\uDF19'
@@ -574,7 +620,7 @@
       })
 
       shuffle(result.all)
-      showReview(cards, result.all)
+      transitionTo(function () { showReview(cards, result.all, false) })
     })
     app.appendChild(btnStart)
 
@@ -593,19 +639,42 @@
       '<div class="stat"><div class="stat-num">' + cards.length + '</div><div class="stat-label">total tarjetas</div></div>'
     app.appendChild(stats)
 
+    // Forecast section
+    var forecast = getForecast(cards)
+    var forecastEl = el('div', 'forecast')
+    forecastEl.setAttribute('aria-label', 'Prevision de repasos')
+    forecastEl.innerHTML =
+      '<div class="forecast-title">Prevision</div>' +
+      '<div class="forecast-items">' +
+        '<div class="forecast-item"><span class="forecast-num">' + forecast.d1 + '</span><span class="forecast-label">manana</span></div>' +
+        '<div class="forecast-item"><span class="forecast-num">' + forecast.d3 + '</span><span class="forecast-label">3 dias</span></div>' +
+        '<div class="forecast-item"><span class="forecast-num">' + forecast.d7 + '</span><span class="forecast-label">7 dias</span></div>' +
+      '</div>'
+    app.appendChild(forecastEl)
+
     // Action buttons row
     var actions = el('div', 'home-actions')
 
+    var btnCram = el('button', 'btn-update', 'Modo libre')
+    btnCram.setAttribute('aria-label', 'Modo libre: repasar sin calendario')
+    btnCram.addEventListener('click', function () {
+      transitionTo(function () { showCramSetup(cards) })
+    })
+    actions.appendChild(btnCram)
+
     var btnSearch = el('button', 'btn-update', 'Buscar')
-    btnSearch.addEventListener('click', function () { showSearch(cards) })
+    btnSearch.setAttribute('aria-label', 'Buscar tarjetas')
+    btnSearch.addEventListener('click', function () { transitionTo(function () { showSearch(cards) }) })
     actions.appendChild(btnSearch)
 
     var btnStats = el('button', 'btn-update', 'Estadisticas')
-    btnStats.addEventListener('click', function () { showStatistics(cards) })
+    btnStats.setAttribute('aria-label', 'Ver estadisticas')
+    btnStats.addEventListener('click', function () { transitionTo(function () { showStatistics(cards) }) })
     actions.appendChild(btnStats)
 
     var btnSettings = el('button', 'btn-update', 'Ajustes')
-    btnSettings.addEventListener('click', function () { showSettings(cards) })
+    btnSettings.setAttribute('aria-label', 'Abrir ajustes')
+    btnSettings.addEventListener('click', function () { transitionTo(function () { showSettings(cards) }) })
     actions.appendChild(btnSettings)
 
     app.appendChild(actions)
@@ -697,6 +766,30 @@
     dataActions.appendChild(btnImport)
     app.appendChild(dataActions)
 
+    // PWA Install banner
+    if (deferredInstallPrompt) {
+      var installBanner = el('div', 'install-banner')
+      installBanner.innerHTML =
+        '<div class="install-text"><strong>Instalar app</strong><span>Accede mas rapido desde tu pantalla de inicio</span></div>'
+      var btnInstall = el('button', 'btn-start', 'Instalar')
+      btnInstall.style.width = 'auto'
+      btnInstall.style.padding = '10px 24px'
+      btnInstall.style.fontSize = '14px'
+      btnInstall.addEventListener('click', function () {
+        deferredInstallPrompt.prompt()
+        deferredInstallPrompt.userChoice.then(function () {
+          deferredInstallPrompt = null
+          installBanner.remove()
+        })
+      })
+      var btnDismiss = el('button', 'install-dismiss', '\u00D7')
+      btnDismiss.setAttribute('aria-label', 'Cerrar banner de instalacion')
+      btnDismiss.addEventListener('click', function () { installBanner.remove() })
+      installBanner.appendChild(btnInstall)
+      installBanner.appendChild(btnDismiss)
+      app.appendChild(installBanner)
+    }
+
     // Fire notification if due cards exist
     if (dueResult.all.length > 0) {
       showDueNotification(dueResult.all.length)
@@ -733,7 +826,9 @@
 
     var btnBack = el('button', 'btn-secondary', 'Volver')
     btnBack.addEventListener('click', function () {
-      loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      transitionTo(function () {
+        loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      })
     })
     app.appendChild(btnBack)
 
@@ -787,6 +882,83 @@
     })
 
     searchInput.focus()
+  }
+
+  // ── Cram Mode Setup ──
+  function showCramSetup(cards) {
+    app.innerHTML = ''
+
+    var header = el('div', 'header')
+    header.innerHTML = '<h1>Modo libre</h1><div class="subtitle">Repasa sin respetar el calendario SM-2</div>'
+    app.appendChild(header)
+
+    var activeCert = null
+
+    // Cert filter pills
+    var pills = el('div', 'cert-pills')
+    var certKeys = ['lpic-1', 'lpic-2', 'lpic-3']
+    var allCerts = [{ key: null, label: 'Todas' }]
+    certKeys.forEach(function (k) {
+      allCerts.push({ key: k, label: k.toUpperCase() })
+    })
+
+    var pillEls = []
+
+    function getFiltered() {
+      if (!activeCert) return cards.slice()
+      return cards.filter(function (c) { return c.cert === activeCert })
+    }
+
+    allCerts.forEach(function (cert) {
+      var subset = cert.key ? cards.filter(function (c) { return c.cert === cert.key }) : cards
+      var pill = el('button', 'cert-pill' + (cert.key === null ? ' active' : ''))
+      pill.innerHTML = cert.label + '<span class="count">' + subset.length + '</span>'
+      pill.addEventListener('click', function () {
+        activeCert = cert.key
+        pillEls.forEach(function (p) { p.classList.remove('active') })
+        pill.classList.add('active')
+        countEl.textContent = getFiltered().length + ' tarjetas disponibles'
+        btnGo.textContent = 'Empezar (' + getFiltered().length + ')'
+      })
+      pills.appendChild(pill)
+      pillEls.push(pill)
+    })
+    app.appendChild(pills)
+
+    var countEl = el('div', 'due-label')
+    countEl.textContent = cards.length + ' tarjetas disponibles'
+    app.appendChild(countEl)
+
+    // Limit input
+    var limitRow = el('div', 'setting-row')
+    limitRow.style.maxWidth = '320px'
+    limitRow.style.margin = '0 auto 24px'
+    var limitLeft = el('div')
+    limitLeft.innerHTML = '<div class="setting-label">Cantidad</div><div class="setting-desc">Tarjetas a repasar</div>'
+    var limitInput = el('input', 'setting-input')
+    limitInput.type = 'number'
+    limitInput.min = '1'
+    limitInput.max = '500'
+    limitInput.value = '50'
+    limitRow.appendChild(limitLeft)
+    limitRow.appendChild(limitInput)
+    app.appendChild(limitRow)
+
+    var btnGo = el('button', 'btn-start', 'Empezar (' + cards.length + ')')
+    btnGo.addEventListener('click', function () {
+      var pool = getFiltered()
+      var limit = parseInt(limitInput.value) || 50
+      if (limit < 1) limit = 1
+      shuffle(pool)
+      var selected = pool.slice(0, limit)
+      showReview(cards, selected, true) // true = cram mode
+    })
+    app.appendChild(btnGo)
+
+    var btnBack = el('button', 'btn-secondary', 'Volver')
+    btnBack.style.marginTop = '16px'
+    btnBack.addEventListener('click', function () { transitionTo(function () { showHome(cards) }) })
+    app.appendChild(btnBack)
   }
 
   // ── Settings Screen (Feature 8 + 3) ──
@@ -865,7 +1037,9 @@
     var btnBack = el('button', 'btn-secondary', 'Volver')
     btnBack.style.marginTop = '24px'
     btnBack.addEventListener('click', function () {
-      loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      transitionTo(function () {
+        loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      })
     })
     app.appendChild(btnBack)
   }
@@ -892,6 +1066,95 @@
       '<div>Tarjetas revisadas: <strong>' + todayData.reviewed + '</strong></div>' +
       '<div>Precision: <strong>' + accuracyToday + '%</strong></div>'
     container.appendChild(todaySection)
+
+    // Activity heatmap (last 12 weeks)
+    var heatSection = el('div', 'stats-section')
+    heatSection.innerHTML = '<h3>Actividad (12 semanas)</h3>'
+    var heatGrid = el('div', 'heatmap')
+
+    // Build 12 weeks (84 days) of data
+    var heatDays = []
+    for (var hi = 83; hi >= 0; hi--) {
+      heatDays.push(addDays(new Date(), -hi))
+    }
+
+    var heatMax = 0
+    heatDays.forEach(function (day) {
+      var d = dailyStats[day]
+      if (d && d.reviewed > heatMax) heatMax = d.reviewed
+    })
+
+    // Day-of-week labels
+    var dayLabels = ['L', '', 'X', '', 'V', '', 'D']
+    var labelCol = el('div', 'heatmap-labels')
+    dayLabels.forEach(function (l) {
+      var lbl = el('div', 'heatmap-day-label', l)
+      labelCol.appendChild(lbl)
+    })
+    heatGrid.appendChild(labelCol)
+
+    // Group days into weeks (columns)
+    // First, figure out what day of week the first day is (Monday = 0)
+    var firstDate = new Date(heatDays[0])
+    var firstDow = (firstDate.getDay() + 6) % 7 // 0=Mon
+
+    // Create week columns
+    var weekCol = el('div', 'heatmap-col')
+    // Pad the first week with empty cells
+    for (var pad = 0; pad < firstDow; pad++) {
+      weekCol.appendChild(el('div', 'heatmap-cell empty'))
+    }
+    var cellInWeek = firstDow
+
+    heatDays.forEach(function (day) {
+      if (cellInWeek >= 7) {
+        heatGrid.appendChild(weekCol)
+        weekCol = el('div', 'heatmap-col')
+        cellInWeek = 0
+      }
+      var d = dailyStats[day] || { reviewed: 0 }
+      var cell = el('div', 'heatmap-cell')
+      var level = 0
+      if (d.reviewed > 0 && heatMax > 0) {
+        var ratio = d.reviewed / heatMax
+        if (ratio <= 0.25) level = 1
+        else if (ratio <= 0.5) level = 2
+        else if (ratio <= 0.75) level = 3
+        else level = 4
+      }
+      cell.setAttribute('data-level', level)
+      cell.title = day + ': ' + d.reviewed + ' tarjetas'
+      weekCol.appendChild(cell)
+      cellInWeek++
+    })
+    if (cellInWeek > 0) heatGrid.appendChild(weekCol)
+
+    heatSection.appendChild(heatGrid)
+
+    // Heatmap legend
+    var heatLegend = el('div', 'heatmap-legend')
+    heatLegend.innerHTML =
+      '<span>Menos</span>' +
+      '<div class="heatmap-cell" data-level="0"></div>' +
+      '<div class="heatmap-cell" data-level="1"></div>' +
+      '<div class="heatmap-cell" data-level="2"></div>' +
+      '<div class="heatmap-cell" data-level="3"></div>' +
+      '<div class="heatmap-cell" data-level="4"></div>' +
+      '<span>Mas</span>'
+    heatSection.appendChild(heatLegend)
+    container.appendChild(heatSection)
+
+    // Forecast in stats
+    var fcast = getForecast(cards)
+    var forecastSection = el('div', 'stats-section')
+    forecastSection.innerHTML =
+      '<h3>Prevision de repasos</h3>' +
+      '<div class="forecast-items" style="justify-content:flex-start;gap:24px;">' +
+        '<div class="forecast-item"><span class="forecast-num">' + fcast.d1 + '</span><span class="forecast-label">manana</span></div>' +
+        '<div class="forecast-item"><span class="forecast-num">' + fcast.d3 + '</span><span class="forecast-label">3 dias</span></div>' +
+        '<div class="forecast-item"><span class="forecast-num">' + fcast.d7 + '</span><span class="forecast-label">7 dias</span></div>' +
+      '</div>'
+    container.appendChild(forecastSection)
 
     // Last 7 days bar chart
     var histSection = el('div', 'stats-section')
@@ -990,13 +1253,15 @@
     var btnBack = el('button', 'btn-secondary', 'Volver')
     btnBack.style.marginTop = '24px'
     btnBack.addEventListener('click', function () {
-      loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      transitionTo(function () {
+        loadCards(false).then(function (c) { showHome(c) }).catch(function () { showHome(cards) })
+      })
     })
     app.appendChild(btnBack)
   }
 
   // ── Review Screen ──
-  function showReview(allCards, dueCards) {
+  function showReview(allCards, dueCards, cramMode) {
     app.innerHTML = ''
     var idx = 0
     var isFlipped = false
@@ -1047,10 +1312,12 @@
     var btnUndo = el('button', 'btn-undo', 'Deshacer')
     btnUndo.addEventListener('click', function () {
       if (!lastUndoState) return
-      // Restore previous SM-2 state
-      lsSet(FC_PREFIX + lastUndoState.cardId, lastUndoState.prevState)
-      // Revert daily stats
-      revertDailyStats(lastUndoState.quality)
+      if (!cramMode) {
+        // Restore previous SM-2 state
+        lsSet(FC_PREFIX + lastUndoState.cardId, lastUndoState.prevState)
+        // Revert daily stats
+        revertDailyStats(lastUndoState.quality)
+      }
       // Remove from results
       results.splice(lastUndoState.resultIdx, 1)
       // Go back to previous card
@@ -1105,6 +1372,7 @@
     function flipCard() {
       if (idx >= dueCards.length || isFlipped) return
       isFlipped = true
+      vibrate(8)
       card.classList.add('flipped')
       ratingArea.classList.remove('hidden')
       flipHint.classList.add('hidden')
@@ -1113,19 +1381,25 @@
     function rate(quality) {
       if (!isFlipped || ratingInProgress) return
       ratingInProgress = true
+      vibrate(quality >= 3 ? [10] : [20, 30, 20])
 
       var c = dueCards[idx]
 
-      // Save state before rating for undo (Feature 4)
+      // Save state before rating for undo
       var prevState = getCardState(c.id)
-      // Deep copy
       prevState = JSON.parse(JSON.stringify(prevState))
 
-      var newState = rateCard(c.id, quality)
+      var newState
+      if (cramMode) {
+        // Cram mode: don't update SM-2 state
+        newState = prevState
+      } else {
+        newState = rateCard(c.id, quality)
+      }
       var resultIdx = results.length
       results.push({ id: c.id, quality: quality })
 
-      updateDailyStats(quality)
+      if (!cramMode) updateDailyStats(quality)
 
       // Store undo state
       lastUndoState = {
