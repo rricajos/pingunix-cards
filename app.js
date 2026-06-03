@@ -229,6 +229,14 @@
     lsSet(NEW_TODAY_KEY, data)
   }
 
+  function decrementNewToday() {
+    var data = lsGet(NEW_TODAY_KEY)
+    var today = todayStr()
+    if (!data || data.date !== today) return
+    data.count = Math.max(0, data.count - 1)
+    lsSet(NEW_TODAY_KEY, data)
+  }
+
   // ── Data loading ──
   function loadCards(forceRefresh) {
     return new Promise(function (resolve, reject) {
@@ -614,10 +622,6 @@
     btnStart.addEventListener('click', function () {
       var result = computeDue()
       if (result.all.length === 0) return
-
-      result.new.forEach(function () {
-        incrementNewToday()
-      })
 
       shuffle(result.all)
       transitionTo(function () { showReview(cards, result.all, false) })
@@ -1317,6 +1321,10 @@
         lsSet(FC_PREFIX + lastUndoState.cardId, lastUndoState.prevState)
         // Revert daily stats
         revertDailyStats(lastUndoState.quality)
+        // If was a new card, decrement new-today count
+        if (lastUndoState.prevState.lastReview === null) {
+          decrementNewToday()
+        }
       }
       // Remove from results
       results.splice(lastUndoState.resultIdx, 1)
@@ -1399,7 +1407,13 @@
       var resultIdx = results.length
       results.push({ id: c.id, quality: quality })
 
-      if (!cramMode) updateDailyStats(quality)
+      if (!cramMode) {
+        updateDailyStats(quality)
+        // Track new card introduction only when actually rated
+        if (prevState.lastReview === null) {
+          incrementNewToday()
+        }
+      }
 
       // Store undo state
       lastUndoState = {
