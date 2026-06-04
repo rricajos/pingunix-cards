@@ -1475,6 +1475,226 @@ html, body {
   color: var(--text);
 }
 
+/* === Review Live Score === */
+
+.review-score {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.score-right {
+  color: var(--green);
+}
+
+.score-wrong {
+  color: var(--red);
+}
+
+/* === Difficulty Indicator Dot === */
+
+.diff-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.diff-dot.diff-new {
+  background: var(--primary);
+}
+
+.diff-dot.diff-easy {
+  background: var(--green);
+}
+
+.diff-dot.diff-medium {
+  background: #d4a24e;
+}
+
+.diff-dot.diff-hard {
+  background: var(--red);
+}
+
+/* === Empty State === */
+
+.empty-state {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.empty-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.empty-sub {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.empty-next {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* === Confetti Canvas === */
+
+.confetti-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 300;
+  pointer-events: none;
+}
+
+/* === Swipe Hint === */
+
+.swipe-hint {
+  position: absolute;
+  bottom: -40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16px;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.swipe-hint.fade-out {
+  opacity: 0;
+}
+
+.swipe-arrow {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.swipe-arrow-left {
+  color: var(--red);
+}
+
+.swipe-arrow-right {
+  color: var(--green);
+}
+
+/* === Skeleton Loading === */
+
+.skeleton-screen {
+  padding: 24px 0;
+}
+
+.skeleton-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.skeleton-line {
+  height: 16px;
+  background: var(--surface);
+  border-radius: 8px;
+  margin: 0 auto;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-title {
+  width: 160px;
+  height: 22px;
+  margin-bottom: 8px;
+}
+
+.skeleton-subtitle {
+  width: 220px;
+  height: 14px;
+}
+
+.skeleton-count {
+  width: 80px;
+  height: 48px;
+  background: var(--surface);
+  border-radius: 12px;
+  margin: 0 auto 24px;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-pills {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.skeleton-pill {
+  width: 72px;
+  height: 32px;
+  background: var(--surface);
+  border-radius: 20px;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-btn {
+  width: 100%;
+  height: 52px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: 32px;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.skeleton-stats {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.skeleton-stat {
+  width: 64px;
+  height: 48px;
+  background: var(--surface);
+  border-radius: 8px;
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* === Pull-to-Refresh === */
+
+.pull-indicator {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 8px 0;
+  transform: translateY(-48px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  flex-shrink: 0;
+  overflow: hidden;
+  height: 0;
+}
+
 /* === Focus Visible (a11y) === */
 
 *:focus-visible {

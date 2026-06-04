@@ -350,6 +350,60 @@
     }
   }
 
+  // ── Confetti animation ──
+  function launchConfetti() {
+    var canvas = document.createElement('canvas')
+    canvas.className = 'confetti-canvas'
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    document.body.appendChild(canvas)
+    var ctx = canvas.getContext('2d')
+    var particles = []
+    var colors = ['#4caf50', '#7b97aa', '#84a59d', '#e05252', '#d4a24e', '#fff']
+    for (var i = 0; i < 80; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        w: Math.random() * 8 + 4,
+        h: Math.random() * 4 + 2,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() * 3 + 2,
+        rot: Math.random() * 360,
+        vr: (Math.random() - 0.5) * 8,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        opacity: 1
+      })
+    }
+    var frame = 0
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      var alive = false
+      particles.forEach(function (p) {
+        if (p.opacity <= 0) return
+        alive = true
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += 0.05
+        p.rot += p.vr
+        if (frame > 60) p.opacity -= 0.015
+        ctx.save()
+        ctx.translate(p.x, p.y)
+        ctx.rotate(p.rot * Math.PI / 180)
+        ctx.globalAlpha = Math.max(0, p.opacity)
+        ctx.fillStyle = p.color
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h)
+        ctx.restore()
+      })
+      frame++
+      if (alive && frame < 180) {
+        requestAnimationFrame(draw)
+      } else {
+        document.body.removeChild(canvas)
+      }
+    }
+    requestAnimationFrame(draw)
+  }
+
   // ── Haptic feedback ──
   function vibrate(ms) {
     if (navigator.vibrate) navigator.vibrate(ms || 10)
@@ -439,7 +493,14 @@
   // ── Screens ──
 
   function showLoading() {
-    app.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando tarjetas...</div>'
+    app.innerHTML =
+      '<div class="skeleton-screen">' +
+        '<div class="skeleton-header"><div class="skeleton-line skeleton-title"></div><div class="skeleton-line skeleton-subtitle"></div></div>' +
+        '<div class="skeleton-count"></div>' +
+        '<div class="skeleton-pills"><div class="skeleton-pill"></div><div class="skeleton-pill"></div><div class="skeleton-pill"></div><div class="skeleton-pill"></div></div>' +
+        '<div class="skeleton-btn"></div>' +
+        '<div class="skeleton-stats"><div class="skeleton-stat"></div><div class="skeleton-stat"></div><div class="skeleton-stat"></div></div>' +
+      '</div>'
   }
 
   function showError(msg) {
@@ -492,6 +553,57 @@
     })
     header.appendChild(themeBtn)
     app.appendChild(header)
+
+    // Pull-to-refresh
+    var pullIndicator = el('div', 'pull-indicator')
+    pullIndicator.textContent = '\u2193 Tira para actualizar'
+    app.appendChild(pullIndicator)
+
+    var pullStartY = 0
+    var isPulling = false
+    var pullTriggered = false
+
+    app.addEventListener('touchstart', function (e) {
+      if (app.scrollTop > 0) return
+      pullStartY = e.touches[0].clientY
+      isPulling = true
+      pullTriggered = false
+    }, { passive: true })
+
+    app.addEventListener('touchmove', function (e) {
+      if (!isPulling) return
+      var dy = e.touches[0].clientY - pullStartY
+      if (dy > 10 && app.scrollTop <= 0) {
+        var progress = Math.min(dy / 120, 1)
+        pullIndicator.style.transform = 'translateY(' + (progress * 48 - 48) + 'px)'
+        pullIndicator.style.opacity = progress
+        if (dy > 120 && !pullTriggered) {
+          pullTriggered = true
+          pullIndicator.textContent = '\u2191 Suelta para actualizar'
+        } else if (dy <= 120 && pullTriggered) {
+          pullTriggered = false
+          pullIndicator.textContent = '\u2193 Tira para actualizar'
+        }
+      }
+    }, { passive: true })
+
+    app.addEventListener('touchend', function () {
+      if (!isPulling) return
+      isPulling = false
+      if (pullTriggered) {
+        pullIndicator.textContent = 'Actualizando...'
+        pullIndicator.style.transform = 'translateY(0)'
+        loadCards(true).then(function (newCards) {
+          transitionTo(function () { showHome(newCards) })
+        }).catch(function () {
+          pullIndicator.style.transform = 'translateY(-48px)'
+          pullIndicator.style.opacity = '0'
+        })
+      } else {
+        pullIndicator.style.transform = 'translateY(-48px)'
+        pullIndicator.style.opacity = '0'
+      }
+    })
 
     var activeCert = null
     var activeSubtemas = []
@@ -616,17 +728,35 @@
     subtemaSection.appendChild(subtemaScrollable)
     app.appendChild(subtemaSection)
 
-    // Start button
-    var btnStart = el('button', 'btn-start', 'Comenzar repaso (' + dueResult.all.length + ' tarjetas)')
-    btnStart.disabled = dueResult.all.length === 0
-    btnStart.addEventListener('click', function () {
-      var result = computeDue()
-      if (result.all.length === 0) return
+    // Start button or empty state
+    if (dueResult.all.length === 0) {
+      var emptyState = el('div', 'empty-state')
+      // Find next review date
+      var nextDate = null
+      cards.forEach(function (c) {
+        var s = getCardState(c.id)
+        if (s.nextReview && (!nextDate || s.nextReview < nextDate)) {
+          nextDate = s.nextReview
+        }
+      })
+      var nextMsg = nextDate ? 'Proximas tarjetas: ' + nextDate : ''
+      emptyState.innerHTML =
+        '<div class="empty-icon">&#127881;</div>' +
+        '<div class="empty-title">Todo al dia</div>' +
+        '<div class="empty-sub">No tienes tarjetas pendientes ahora</div>' +
+        (nextMsg ? '<div class="empty-next">' + nextMsg + '</div>' : '')
+      app.appendChild(emptyState)
+    } else {
+      var btnStart = el('button', 'btn-start', 'Comenzar repaso (' + dueResult.all.length + ' tarjetas)')
+      btnStart.addEventListener('click', function () {
+        var result = computeDue()
+        if (result.all.length === 0) return
 
-      shuffle(result.all)
-      transitionTo(function () { showReview(cards, result.all, false) })
-    })
-    app.appendChild(btnStart)
+        shuffle(result.all)
+        transitionTo(function () { showReview(cards, result.all, false) })
+      })
+      app.appendChild(btnStart)
+    }
 
     // Stats row
     var streak = getStreak()
@@ -1308,9 +1438,27 @@
     // Header
     var reviewHeader = el('div', 'review-header')
     var progressText = el('div', 'review-progress-text')
+    // Live score counter
+    var scoreEl = el('div', 'review-score')
+    var scoreRight = 0
+    var scoreWrong = 0
+    function updateScore() {
+      scoreEl.innerHTML = '<span class="score-right">' + scoreRight + '</span> / <span class="score-wrong">' + scoreWrong + '</span>'
+    }
+    updateScore()
+
     var btnClose = el('button', 'btn-close', '\u00D7')
-    btnClose.addEventListener('click', function () { showHome(allCards) })
+    btnClose.setAttribute('aria-label', 'Salir del repaso')
+    function confirmExit() {
+      var remaining = dueCards.length - idx
+      if (remaining > 0 && idx > 0) {
+        if (!confirm('Quedan ' + remaining + ' tarjetas. ¿Salir?')) return
+      }
+      showHome(allCards)
+    }
+    btnClose.addEventListener('click', confirmExit)
     reviewHeader.appendChild(progressText)
+    reviewHeader.appendChild(scoreEl)
     reviewHeader.appendChild(btnClose)
     app.appendChild(reviewHeader)
 
@@ -1355,6 +1503,10 @@
           decrementNewToday()
         }
       }
+      // Revert score counter
+      if (lastUndoState.quality >= 3) scoreRight = Math.max(0, scoreRight - 1)
+      else scoreWrong = Math.max(0, scoreWrong - 1)
+      updateScore()
       // Remove from results
       results.splice(lastUndoState.resultIdx, 1)
       // Go back to previous card
@@ -1391,13 +1543,31 @@
       flipHint.classList.remove('hidden')
       intervalToast.style.display = 'none'
 
+      // Difficulty indicator based on easeFactor
+      var cardState = getCardState(c.id)
+      var diffClass = 'diff-new'
+      var diffLabel = 'Nueva'
+      if (cardState.lastReview !== null) {
+        if (cardState.easeFactor >= 2.2) {
+          diffClass = 'diff-easy'
+          diffLabel = 'Facil'
+        } else if (cardState.easeFactor >= 1.8) {
+          diffClass = 'diff-medium'
+          diffLabel = 'Media'
+        } else {
+          diffClass = 'diff-hard'
+          diffLabel = 'Dificil'
+        }
+      }
+      var diffDot = '<span class="diff-dot ' + diffClass + '" title="' + diffLabel + '"></span>'
+
       front.innerHTML =
-        '<div class="card-label">Pregunta</div>' +
+        '<div class="card-label">Pregunta ' + diffDot + '</div>' +
         '<div class="card-text">' + formatCardText(c.q) + '</div>' +
         '<div class="card-meta">' + c.subtema + '</div>'
 
       back.innerHTML =
-        '<div class="card-label">Respuesta</div>' +
+        '<div class="card-label">Respuesta ' + diffDot + '</div>' +
         '<div class="card-text">' + formatCardText(c.a) + '</div>' +
         '<div class="card-meta">' + c.subtema + '</div>'
 
@@ -1406,6 +1576,7 @@
       progressText.innerHTML = '<strong>' + (idx + 1) + '</strong> / ' + dueCards.length
     }
 
+    var swipeHintShown = false
     function flipCard() {
       if (idx >= dueCards.length || isFlipped) return
       isFlipped = true
@@ -1413,6 +1584,16 @@
       card.classList.add('flipped')
       ratingArea.classList.remove('hidden')
       flipHint.classList.add('hidden')
+
+      // Show swipe hint on first flip only
+      if (!swipeHintShown && 'ontouchstart' in window) {
+        swipeHintShown = true
+        var hint = el('div', 'swipe-hint')
+        hint.innerHTML = '<span class="swipe-arrow swipe-arrow-left">&larr; Fallo</span><span class="swipe-arrow swipe-arrow-right">Acierto &rarr;</span>'
+        cardArea.appendChild(hint)
+        setTimeout(function () { hint.classList.add('fade-out') }, 2000)
+        setTimeout(function () { if (hint.parentNode) hint.parentNode.removeChild(hint) }, 2500)
+      }
     }
 
     function rate(quality) {
@@ -1435,6 +1616,11 @@
       }
       var resultIdx = results.length
       results.push({ id: c.id, quality: quality })
+
+      // Update live score
+      if (quality >= 3) scoreRight++
+      else scoreWrong++
+      updateScore()
 
       if (!cramMode) {
         updateDailyStats(quality)
@@ -1560,7 +1746,7 @@
         e.preventDefault()
         if (lastUndoState) btnUndo.click()
       } else if (e.key === 'Escape') {
-        showHome(allCards)
+        confirmExit()
       }
     }
 
@@ -1599,6 +1785,12 @@
       '</div>'
 
     app.appendChild(summary)
+
+    // Confetti if accuracy > 80%
+    var accuracy = results.length > 0 ? (good / results.length) * 100 : 0
+    if (accuracy >= 80 && results.length >= 3) {
+      launchConfetti()
+    }
 
     var actions = el('div', 'summary-actions')
     summary.appendChild(actions)
