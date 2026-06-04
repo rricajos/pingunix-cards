@@ -25,8 +25,13 @@
   // ── Default settings ──
   var DEFAULT_SETTINGS = {
     newCardsPerDay: 20,
-    notifications: false
+    notifications: false,
+    progression: true
   }
+
+  // ── Mastery thresholds for ring progression ──
+  var MASTERY_SEEN_PCT = 0.6   // 60% of cards must be reviewed
+  var MASTERY_ACCURACY = 0.6   // 60% accuracy on reviewed cards
 
   // ── Swipe threshold ──
   var SWIPE_MIN_DISTANCE = 50
@@ -237,6 +242,76 @@
     lsSet(NEW_TODAY_KEY, data)
   }
 
+  // ── Subtema mastery & ring progression ──
+  function getSubtemaMastery(cards, subtema) {
+    var subset = cards.filter(function (c) { return c.subtema === subtema })
+    if (subset.length === 0) return { seen: 0, total: 0, accuracy: 0, mastered: false }
+
+    var seen = 0
+    var correct = 0
+    var total = subset.length
+
+    subset.forEach(function (c) {
+      var s = getCardState(c.id)
+      if (s.lastReview !== null) {
+        seen++
+        if (s.lastQuality !== null && s.lastQuality >= 3) correct++
+      }
+    })
+
+    var accuracy = seen > 0 ? correct / seen : 0
+    var seenPct = seen / total
+    var mastered = seenPct >= MASTERY_SEEN_PCT && accuracy >= MASTERY_ACCURACY
+
+    return { seen: seen, total: total, accuracy: accuracy, seenPct: seenPct, mastered: mastered }
+  }
+
+  function getOrderedSubtemas(cards, cert) {
+    var map = {}
+    cards.forEach(function (c) {
+      if (cert && c.cert !== cert) return
+      map[c.cert + ':' + c.subtema] = { cert: c.cert, subtema: c.subtema }
+    })
+
+    var entries = Object.keys(map).map(function (k) { return map[k] })
+
+    // Sort by cert then subtema numerically
+    entries.sort(function (a, b) {
+      if (a.cert !== b.cert) return a.cert < b.cert ? -1 : 1
+      var pa = a.subtema.split('.').map(Number)
+      var pb = b.subtema.split('.').map(Number)
+      for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+        var va = pa[i] || 0
+        var vb = pb[i] || 0
+        if (va !== vb) return va - vb
+      }
+      return 0
+    })
+    return entries
+  }
+
+  function getUnlockedSubtemas(cards) {
+    var settings = getSettings()
+    if (!settings.progression) return null // null = all unlocked
+
+    var unlocked = {}
+    var certs = {}
+    cards.forEach(function (c) { certs[c.cert] = true })
+
+    Object.keys(certs).forEach(function (cert) {
+      var ordered = getOrderedSubtemas(cards, cert)
+      for (var i = 0; i < ordered.length; i++) {
+        var st = ordered[i].subtema
+        unlocked[st] = true
+        // Check mastery; if not mastered, stop unlocking further
+        var mastery = getSubtemaMastery(cards, st)
+        if (!mastery.mastered) break
+      }
+    })
+
+    return unlocked
+  }
+
   // ── Data loading ──
   function loadCards(forceRefresh) {
     return new Promise(function (resolve, reject) {
@@ -313,6 +388,12 @@
     var today = todayStr()
     var filtered = cards
     var settings = getSettings()
+
+    // Ring progression: filter out locked subtemas
+    var unlocked = getUnlockedSubtemas(cards)
+    if (unlocked) {
+      filtered = filtered.filter(function (c) { return unlocked[c.subtema] })
+    }
 
     if (certFilter) {
       filtered = filtered.filter(function (c) { return c.cert === certFilter })
@@ -665,6 +746,7 @@
     app.appendChild(pills)
 
     // Subtema filter
+    var unlocked = getUnlockedSubtemas(cards)
     var subtemaSection = el('div', 'subtema-section')
     var subtemaToggle = el('button', 'subtema-toggle', 'Filtrar por tema')
     subtemaToggle.addEventListener('click', function () {
@@ -699,18 +781,24 @@
       })
 
       subtemas.forEach(function (st) {
-        var sPill = el('button', 'subtema-pill', st)
-        sPill.addEventListener('click', function () {
-          var idx = activeSubtemas.indexOf(st)
-          if (idx === -1) {
-            activeSubtemas.push(st)
-            sPill.classList.add('active')
-          } else {
-            activeSubtemas.splice(idx, 1)
-            sPill.classList.remove('active')
-          }
-          refreshAll()
-        })
+        var isLocked = unlocked && !unlocked[st]
+        var sPill = el('button', 'subtema-pill' + (isLocked ? ' locked' : ''), (isLocked ? '\uD83D\uDD12 ' : '') + st)
+        if (isLocked) {
+          sPill.disabled = true
+          sPill.title = 'Domina el subtema anterior para desbloquear'
+        } else {
+          sPill.addEventListener('click', function () {
+            var idx = activeSubtemas.indexOf(st)
+            if (idx === -1) {
+              activeSubtemas.push(st)
+              sPill.classList.add('active')
+            } else {
+              activeSubtemas.splice(idx, 1)
+              sPill.classList.remove('active')
+            }
+            refreshAll()
+          })
+        }
         groupPills.appendChild(sPill)
         subtemaPillEls.push(sPill)
       })
@@ -785,6 +873,46 @@
         '<div class="forecast-item"><span class="forecast-num">' + forecast.d7 + '</span><span class="forecast-label">7 dias</span></div>' +
       '</div>'
     app.appendChild(forecastEl)
+
+    // Progression map (if enabled)
+    if (unlocked) {
+      var progSection = el('div', 'progression-section')
+      progSection.innerHTML = '<div class="progression-title">Progresion</div>'
+
+      certKeys.forEach(function (certKey) {
+        if (!subtemaByCert[certKey]) return
+        var certLabel = el('div', 'progression-cert', certKey.toUpperCase())
+        progSection.appendChild(certLabel)
+
+        var ringRow = el('div', 'progression-row')
+        var ordered = getOrderedSubtemas(cards, certKey)
+
+        ordered.forEach(function (entry) {
+          var st = entry.subtema
+          var mastery = getSubtemaMastery(cards, st)
+          var isUnlocked = unlocked[st]
+          var node = el('div', 'ring-node' + (mastery.mastered ? ' mastered' : '') + (!isUnlocked ? ' locked' : ''))
+
+          var pct = Math.round((mastery.seenPct || 0) * 100)
+          var accPct = Math.round((mastery.accuracy || 0) * 100)
+
+          if (!isUnlocked) {
+            node.innerHTML = '<span class="ring-icon">\uD83D\uDD12</span><span class="ring-label">' + st + '</span>'
+          } else if (mastery.mastered) {
+            node.innerHTML = '<span class="ring-icon">\u2705</span><span class="ring-label">' + st + '</span><span class="ring-pct">' + accPct + '%</span>'
+          } else {
+            node.innerHTML = '<span class="ring-icon">\uD83D\uDCD6</span><span class="ring-label">' + st + '</span><span class="ring-pct">' + pct + '% visto</span>'
+          }
+
+          node.title = st + ': ' + mastery.seen + '/' + mastery.total + ' vistas, ' + accPct + '% acierto'
+          ringRow.appendChild(node)
+        })
+
+        progSection.appendChild(ringRow)
+      })
+
+      app.appendChild(progSection)
+    }
 
     // Action buttons row
     var actions = el('div', 'home-actions')
@@ -1153,6 +1281,24 @@
     notifRow.appendChild(notifLeft)
     notifRow.appendChild(notifToggle)
     container.appendChild(notifRow)
+
+    // Progression toggle
+    var progRow = el('div', 'setting-row')
+    var progLeft = el('div')
+    progLeft.innerHTML = '<div class="setting-label">Progresion por anillos</div><div class="setting-desc">Desbloquea subtemas solo al dominar los anteriores (60% vistas, 60% acierto)</div>'
+    var progToggle = el('button', 'setting-toggle' + (settings.progression ? ' active' : ''))
+    progToggle.addEventListener('click', function () {
+      settings.progression = !settings.progression
+      setSettings(settings)
+      if (settings.progression) {
+        progToggle.classList.add('active')
+      } else {
+        progToggle.classList.remove('active')
+      }
+    })
+    progRow.appendChild(progLeft)
+    progRow.appendChild(progToggle)
+    container.appendChild(progRow)
 
     // Theme info
     var themeRow = el('div', 'setting-row')
